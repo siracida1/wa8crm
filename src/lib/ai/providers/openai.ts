@@ -25,11 +25,27 @@ interface OpenAiResponse {
  * in `generateReply`).
  */
 export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult> {
+  return generateOpenAiCompatible(args, OPENAI_URL, 'OpenAI')
+}
+
+/**
+ * Shared implementation for any provider that speaks OpenAI's Chat
+ * Completions wire format — same request/response shape, just a
+ * different base URL and API key. DeepSeek is the other consumer
+ * (see ./deepseek.ts); this is where a future OpenAI-compatible
+ * provider (Groq, Mistral, a local vLLM/Ollama endpoint, …) would
+ * plug in too.
+ */
+export async function generateOpenAiCompatible(
+  args: ProviderArgs,
+  url: string,
+  providerName: string,
+): Promise<ProviderResult> {
   const { apiKey, model, systemPrompt, messages, timeoutMs } = args
 
   let res: Response
   try {
-    res = await fetch(OPENAI_URL, {
+    res = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -41,7 +57,12 @@ export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult
           { role: 'system', content: systemPrompt },
           ...mergeConsecutive(messages),
         ],
+        // OpenAI's current models want `max_completion_tokens`; DeepSeek
+        // (and OpenAI's older models) use the original `max_tokens`. Both
+        // APIs ignore fields they don't recognize, so sending both caps
+        // output on either without needing a per-provider request shape.
         max_completion_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -50,13 +71,13 @@ export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult
   }
 
   if (!res.ok) {
-    throw await providerHttpError('OpenAI', res)
+    throw await providerHttpError(providerName, res)
   }
 
   const data = (await res.json().catch(() => null)) as OpenAiResponse | null
   const text = data?.choices?.[0]?.message?.content
   if (!text || typeof text !== 'string' || !text.trim()) {
-    throw new AiError('OpenAI returned an empty response.', {
+    throw new AiError(`${providerName} returned an empty response.`, {
       code: 'empty_response',
     })
   }
