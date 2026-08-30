@@ -25,21 +25,31 @@ interface OpenAiResponse {
  * in `generateReply`).
  */
 export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult> {
-  return generateOpenAiCompatible(args, OPENAI_URL, 'OpenAI')
+  // OpenAI's current (reasoning-family) models reject the classic
+  // `max_tokens` outright ("Unsupported parameter"), so this is the one
+  // caller that needs `max_completion_tokens`.
+  return generateOpenAiCompatible(args, OPENAI_URL, 'OpenAI', 'max_completion_tokens')
 }
 
 /**
  * Shared implementation for any provider that speaks OpenAI's Chat
  * Completions wire format — same request/response shape, just a
- * different base URL and API key. DeepSeek is the other consumer
- * (see ./deepseek.ts); this is where a future OpenAI-compatible
- * provider (Groq, Mistral, a local vLLM/Ollama endpoint, …) would
- * plug in too.
+ * different base URL, key, and token-limit field name. DeepSeek and
+ * Gemini are the other consumers (see ./deepseek.ts, ./gemini.ts);
+ * this is where a future OpenAI-compatible provider (Groq, Mistral, a
+ * local vLLM/Ollama endpoint, …) would plug in too.
+ *
+ * `tokenLimitField` matters more than it looks: sending both
+ * `max_tokens` and `max_completion_tokens` isn't universally safe —
+ * Gemini's OpenAI-compat layer 400s with "max_tokens and
+ * max_completion_tokens cannot both be set" if both are present, so
+ * each provider gets exactly the one field it accepts.
  */
 export async function generateOpenAiCompatible(
   args: ProviderArgs,
   url: string,
   providerName: string,
+  tokenLimitField: 'max_tokens' | 'max_completion_tokens' = 'max_tokens',
 ): Promise<ProviderResult> {
   const { apiKey, model, systemPrompt, messages, timeoutMs } = args
 
@@ -57,12 +67,7 @@ export async function generateOpenAiCompatible(
           { role: 'system', content: systemPrompt },
           ...mergeConsecutive(messages),
         ],
-        // OpenAI's current models want `max_completion_tokens`; DeepSeek
-        // (and OpenAI's older models) use the original `max_tokens`. Both
-        // APIs ignore fields they don't recognize, so sending both caps
-        // output on either without needing a per-provider request shape.
-        max_completion_tokens: MAX_OUTPUT_TOKENS,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        [tokenLimitField]: MAX_OUTPUT_TOKENS,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
