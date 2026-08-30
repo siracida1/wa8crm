@@ -112,6 +112,7 @@ interface SidebarProps {
 }
 
 import { useTranslations } from "next-intl";
+import { LanguageToggle } from "@/components/layout/language-toggle";
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
@@ -203,6 +204,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Language toggle — its own row, independent of the logo row's
+            and nav list's flex layouts so it can't disturb either. */}
+        <div className="flex shrink-0 items-center justify-center border-b border-border px-4 py-2">
+          <LanguageToggle />
         </div>
 
         {/* Main navigation */}
