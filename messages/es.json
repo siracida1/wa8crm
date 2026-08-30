@@ -101,7 +101,22 @@
       "timeS": "hace {sec}s",
       "timeM": "hace {min}m",
       "timeH": "hace {hr}h",
-      "timeD": "hace {day}d"
+      "timeD": "hace {day}d",
+      "activityMessage": "Nuevo mensaje de {name}",
+      "activityUnknownContact": "Desconocido",
+      "activityContact": "Nuevo contacto: {name}",
+      "activityDealInStage": "Negocio \"{title}\" en {stage}",
+      "activityDealUpdated": "Negocio \"{title}\" actualizado",
+      "activityBroadcastSent": "Difusión \"{name}\" enviada a {count} contactos",
+      "activityBroadcastStatus": "Difusión \"{name}\" {status} ({count} destinatarios)",
+      "statusDraft": "borrador",
+      "statusScheduled": "programada",
+      "statusSending": "enviándose",
+      "statusFailed": "fallida",
+      "activityAutomationTriggered": "Automatización \"{name}\" activada para {who}",
+      "activityAutomationFailed": "Automatización \"{name}\" falló para {who}",
+      "activityAutomationFallbackName": "Automatización",
+      "activityContactFallback": "un contacto"
     },
     "conversationsChart": {
       "title": "Conversaciones a lo largo del tiempo",

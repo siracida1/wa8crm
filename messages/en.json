@@ -101,7 +101,22 @@
       "timeS": "{sec}s ago",
       "timeM": "{min}m ago",
       "timeH": "{hr}h ago",
-      "timeD": "{day}d ago"
+      "timeD": "{day}d ago",
+      "activityMessage": "New message from {name}",
+      "activityUnknownContact": "Unknown",
+      "activityContact": "New contact: {name}",
+      "activityDealInStage": "Deal \"{title}\" in {stage}",
+      "activityDealUpdated": "Deal \"{title}\" updated",
+      "activityBroadcastSent": "Broadcast \"{name}\" sent to {count} contacts",
+      "activityBroadcastStatus": "Broadcast \"{name}\" {status} ({count} recipients)",
+      "statusDraft": "draft",
+      "statusScheduled": "scheduled",
+      "statusSending": "sending",
+      "statusFailed": "failed",
+      "activityAutomationTriggered": "Automation \"{name}\" triggered for {who}",
+      "activityAutomationFailed": "Automation \"{name}\" failed for {who}",
+      "activityAutomationFallbackName": "Automation",
+      "activityContactFallback": "a contact"
     },
     "conversationsChart": {
       "title": "Conversations Over Time",

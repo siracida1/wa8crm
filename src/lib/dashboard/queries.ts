@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { useTranslations } from 'next-intl'
 import {
   daysAgoStart,
   DOW_SHORT_MON_FIRST,
@@ -26,6 +27,15 @@ import type {
 // ------------------------------------------------------------
 
 type DB = SupabaseClient
+
+// Maps a broadcast's raw status (everything but 'sent', which gets its
+// own sentence shape in the activity feed) to its message-catalogue key.
+const BROADCAST_STATUS_KEY: Record<string, string> = {
+  draft: 'statusDraft',
+  scheduled: 'statusScheduled',
+  sending: 'statusSending',
+  failed: 'statusFailed',
+}
 
 // --- 1. Metric cards ---------------------------------------------------
 
@@ -265,7 +275,11 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
 
 // --- 5. Activity feed --------------------------------------------------
 
-export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
+export async function loadActivity(
+  db: DB,
+  limit = 20,
+  t: ReturnType<typeof useTranslations>,
+): Promise<ActivityItem[]> {
   // Pull ~10 from each source (plenty of headroom after merge-sort),
   // then interleave by timestamp. The individual per-table limits
   // keep the payload small; the final limit is enforced after sort.
@@ -314,11 +328,11 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   }>) {
     const conv = Array.isArray(m.conversations) ? m.conversations[0] : m.conversations
     const contact = Array.isArray(conv?.contacts) ? conv?.contacts[0] : conv?.contacts
-    const who = contact?.name || contact?.phone || 'Unknown'
+    const who = contact?.name || contact?.phone || t('activityUnknownContact')
     items.push({
       id: `msg-${m.id}`,
       kind: 'message',
-      text: `New message from ${who}`,
+      text: t('activityMessage', { name: who }),
       at: m.created_at,
       href: `/inbox?c=${m.conversation_id}`,
     })
@@ -328,7 +342,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     items.push({
       id: `contact-${c.id}`,
       kind: 'contact',
-      text: `New contact: ${c.name || c.phone}`,
+      text: t('activityContact', { name: c.name || c.phone }),
       at: c.created_at,
       href: '/contacts',
     })
@@ -345,8 +359,8 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
       id: `deal-${d.id}`,
       kind: 'deal',
       text: stage?.name
-        ? `Deal "${d.title}" in ${stage.name}`
-        : `Deal "${d.title}" updated`,
+        ? t('activityDealInStage', { title: d.title, stage: stage.name })
+        : t('activityDealUpdated', { title: d.title }),
       at: d.updated_at,
       href: '/pipelines',
     })
@@ -359,14 +373,18 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
     total_recipients: number
     created_at: string
   }>) {
-    const label =
+    const text =
       b.status === 'sent'
-        ? `sent to ${b.total_recipients} contacts`
-        : `${b.status} (${b.total_recipients} recipients)`
+        ? t('activityBroadcastSent', { name: b.name, count: b.total_recipients })
+        : t('activityBroadcastStatus', {
+            name: b.name,
+            status: t(BROADCAST_STATUS_KEY[b.status] ?? 'statusDraft'),
+            count: b.total_recipients,
+          })
     items.push({
       id: `broadcast-${b.id}`,
       kind: 'broadcast',
-      text: `Broadcast "${b.name}" ${label}`,
+      text,
       at: b.created_at,
       href: '/broadcasts',
     })
@@ -382,12 +400,15 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   }>) {
     const automation = Array.isArray(l.automation) ? l.automation[0] : l.automation
     const contact = Array.isArray(l.contact) ? l.contact[0] : l.contact
-    const who = contact?.name || contact?.phone || 'a contact'
-    const autoName = automation?.name || 'Automation'
+    const who = contact?.name || contact?.phone || t('activityContactFallback')
+    const autoName = automation?.name || t('activityAutomationFallbackName')
     items.push({
       id: `auto-${l.id}`,
       kind: 'automation',
-      text: `Automation "${autoName}" ${l.status === 'failed' ? 'failed for' : 'triggered for'} ${who}`,
+      text:
+        l.status === 'failed'
+          ? t('activityAutomationFailed', { name: autoName, who })
+          : t('activityAutomationTriggered', { name: autoName, who }),
       at: l.created_at,
     })
   }
