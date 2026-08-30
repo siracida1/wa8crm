@@ -78,8 +78,13 @@ export async function POST(request: Request) {
     if (!body || typeof body !== 'object') return bad('Invalid request body')
 
     const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic' && provider !== 'deepseek') {
-      return bad('provider must be "openai", "anthropic", or "deepseek"')
+    if (
+      provider !== 'openai' &&
+      provider !== 'anthropic' &&
+      provider !== 'deepseek' &&
+      provider !== 'gemini'
+    ) {
+      return bad('provider must be "openai", "anthropic", "deepseek", or "gemini"')
     }
     const model = typeof body.model === 'string' ? body.model.trim() : ''
     if (!model) return bad('model is required')

@@ -172,6 +172,50 @@ describe('generateReply — DeepSeek', () => {
   })
 })
 
+describe('generateReply — Gemini', () => {
+  it('calls the Gemini OpenAI-compatible endpoint and returns the reply', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        choices: [{ message: { content: 'Sure — happy to help!' } }],
+        usage: { prompt_tokens: 42, completion_tokens: 8, total_tokens: 50 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({ provider: 'gemini', model: 'gemini-2.5-flash' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toEqual({
+      text: 'Sure — happy to help!',
+      handoff: false,
+      usage: { promptTokens: 42, completionTokens: 8, totalTokens: 50 },
+    })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('generativelanguage.googleapis.com')
+    expect(opts.headers.Authorization).toBe('Bearer sk-test')
+  })
+
+  it('maps a 401 to an invalid_key AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errResponse(401, { error: { message: 'API key not valid' } }),
+      ),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'gemini', model: 'gemini-2.5-flash' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_key', status: 401 })
+  })
+})
+
 describe('generateReply — Anthropic', () => {
   it('calls the messages endpoint with the version header and parses text blocks', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

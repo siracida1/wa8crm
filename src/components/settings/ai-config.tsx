@@ -42,12 +42,14 @@ const PROVIDER_LABEL: Record<AiProvider, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic (Claude)',
   deepseek: 'DeepSeek',
+  gemini: 'Google Gemini',
 };
 
 const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   openai: 'sk-...',
   anthropic: 'sk-ant-...',
   deepseek: 'sk-...',
+  gemini: 'AIza...',
 };
 
 export function AiConfig() {
@@ -285,6 +287,9 @@ export function AiConfig() {
                     </SelectItem>
                     <SelectItem value="deepseek">
                       {PROVIDER_LABEL.deepseek}
+                    </SelectItem>
+                    <SelectItem value="gemini">
+                      {PROVIDER_LABEL.gemini}
                     </SelectItem>
                   </SelectContent>
                 </Select>
