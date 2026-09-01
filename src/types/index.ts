@@ -477,7 +477,11 @@ export type AutomationTriggerType =
    *  to (optionally) a specific list. */
   | 'email_opened'
   /** Fires the moment a tracked link in a send is clicked. */
-  | 'email_clicked';
+  | 'email_clicked'
+  /** Fires when the IMAP poller files a new inbound message into a
+   *  connected mailbox's inbox. Account-wide — not list-scoped, since a
+   *  reply isn't tied to any particular recipient list. */
+  | 'email_replied';
 
 export type AutomationStepType =
   | 'send_message'

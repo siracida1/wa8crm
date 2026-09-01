@@ -34,6 +34,15 @@ export async function PATCH(
     update.smtp_password = body.smtp_password
   }
   if ('is_default' in body) update.is_default = Boolean(body.is_default)
+  if (typeof body.imap_host === 'string') update.imap_host = body.imap_host.trim() || null
+  if (body.imap_port !== undefined) {
+    update.imap_port = body.imap_port === '' || body.imap_port === null ? null : Number(body.imap_port)
+  }
+  if (typeof body.imap_user === 'string') update.imap_user = body.imap_user.trim() || null
+  // Same "blank = keep current secret" convention as smtp_password.
+  if (typeof body.imap_password === 'string' && body.imap_password.length > 0) {
+    update.imap_password = body.imap_password
+  }
   update.updated_at = new Date().toISOString()
 
   const admin = supabaseAdmin()

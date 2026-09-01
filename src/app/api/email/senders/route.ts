@@ -11,7 +11,7 @@ export async function GET() {
     const { supabase } = await getCurrentAccount()
     const { data, error } = await supabase
       .from('email_senders')
-      .select('id, name, email, host, port, smtp_user, is_default, created_at')
+      .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, created_at')
       .order('created_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ senders: data ?? [] })
@@ -39,6 +39,20 @@ export async function POST(request: Request) {
   const smtp_password = typeof body.smtp_password === 'string' ? body.smtp_password : ''
   const is_default = Boolean(body.is_default)
 
+  // IMAP is optional — a sender with none of these just can't receive
+  // into the Inbox, it can still send campaigns/sequences fine.
+  const imap_host = typeof body.imap_host === 'string' ? body.imap_host.trim() : ''
+  const imap_port = body.imap_port !== undefined && body.imap_port !== '' ? Number(body.imap_port) : null
+  const imap_user = typeof body.imap_user === 'string' ? body.imap_user.trim() : ''
+  const imap_password = typeof body.imap_password === 'string' ? body.imap_password : ''
+  const hasImap = imap_host || imap_user || imap_password
+  if (hasImap && (!imap_host || !Number.isFinite(imap_port) || !imap_user || !imap_password)) {
+    return NextResponse.json(
+      { error: 'Si configurás IMAP, host, puerto, usuario y contraseña son todos requeridos' },
+      { status: 400 },
+    )
+  }
+
   if (!name || !email || !host || !Number.isFinite(port) || !smtp_user || !smtp_password) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
   }
@@ -61,8 +75,12 @@ export async function POST(request: Request) {
       smtp_user,
       smtp_password,
       is_default,
+      imap_host: hasImap ? imap_host : null,
+      imap_port: hasImap ? imap_port : null,
+      imap_user: hasImap ? imap_user : null,
+      imap_password: hasImap ? imap_password : null,
     })
-    .select('id, name, email, host, port, smtp_user, is_default, created_at')
+    .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

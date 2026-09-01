@@ -52,7 +52,9 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.14",
+    "imapflow": "^1.7.7",
     "lucide-react": "^1.30.0",
+    "mailparser": "^3.9.19",
     "next": "16.2.12",
     "next-intl": "^4.13.5",
     "nodemailer": "^9.1.0",
@@ -69,6 +71,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/dompurify": "^3.0.5",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^26",
     "@types/nodemailer": "^8.0.1",
     "@types/papaparse": "^5.5.2",

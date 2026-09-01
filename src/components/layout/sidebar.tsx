@@ -13,6 +13,7 @@ import {
   Crown,
   FileText,
   GitBranch,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -109,6 +110,7 @@ const whatsappNavItems: NavItem[] = [
 ];
 
 const emailNavItems: NavItem[] = [
+  { href: "/email/inbox", labelKey: "emailInbox", icon: Inbox },
   { href: "/email", labelKey: "emailAccounts", icon: Mail },
   { href: "/email/templates", labelKey: "emailTemplates", icon: FileText },
   { href: "/email/lists", labelKey: "emailLists", icon: Users },

@@ -24,6 +24,9 @@ interface EmailSender {
   port: number;
   smtp_user: string;
   is_default: boolean;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_user: string | null;
   created_at: string;
 }
 
@@ -36,6 +39,10 @@ interface DraftState {
   smtp_user: string;
   smtp_password: string;
   is_default: boolean;
+  imap_host: string;
+  imap_port: number | "";
+  imap_user: string;
+  imap_password: string;
 }
 
 function emptyDraft(hasSenders: boolean): DraftState {
@@ -47,6 +54,10 @@ function emptyDraft(hasSenders: boolean): DraftState {
     smtp_user: "",
     smtp_password: "",
     is_default: !hasSenders,
+    imap_host: "",
+    imap_port: "",
+    imap_user: "",
+    imap_password: "",
   };
 }
 
@@ -90,6 +101,10 @@ export function SendersManager() {
       smtp_user: s.smtp_user,
       smtp_password: "",
       is_default: s.is_default,
+      imap_host: s.imap_host ?? "",
+      imap_port: s.imap_port ?? "",
+      imap_user: s.imap_user ?? "",
+      imap_password: "",
     });
   };
 
@@ -320,6 +335,55 @@ export function SendersManager() {
                 />
                 <span className="text-sm text-muted-foreground">Usar como predeterminada</span>
               </label>
+
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs font-medium text-foreground">
+                  IMAP — recibir respuestas en el Inbox (opcional)
+                </p>
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Suele ser un host distinto al de SMTP (ej. Gmail: imap.gmail.com:993).
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Servidor IMAP</Label>
+                    <Input
+                      value={draft.imap_host}
+                      onChange={(e) => setDraft({ ...draft, imap_host: e.target.value })}
+                      placeholder="imap.gmail.com"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Puerto</Label>
+                    <Input
+                      type="number"
+                      value={draft.imap_port}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          imap_port: e.target.value === "" ? "" : Number(e.target.value),
+                        })
+                      }
+                      placeholder="993"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Usuario</Label>
+                    <Input
+                      value={draft.imap_user}
+                      onChange={(e) => setDraft({ ...draft, imap_user: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Contraseña</Label>
+                    <Input
+                      type="password"
+                      value={draft.imap_password}
+                      onChange={(e) => setDraft({ ...draft, imap_password: e.target.value })}
+                      placeholder={draft.id ? "Dejar en blanco para no cambiarla" : "••••••••••••"}
+                    />
+                  </div>
+                </div>
+              </div>
 
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="flex items-center justify-between gap-3">
