@@ -61,16 +61,25 @@ interface Automation {
   execution_count: number;
 }
 
+type SequenceTriggerType = "email_list_joined" | "email_opened" | "email_clicked";
+
+const TRIGGER_LABEL: Record<SequenceTriggerType, string> = {
+  email_list_joined: "Se une a la lista",
+  email_opened: "Abre un email de la lista",
+  email_clicked: "Hace clic en un email de la lista",
+};
+
 interface SequenceDraft {
   id?: string;
   name: string;
+  trigger_type: SequenceTriggerType;
   list_id: string;
   is_active: boolean;
   steps: StepDraft[];
 }
 
 function emptyDraft(): SequenceDraft {
-  return { name: "", list_id: "", is_active: true, steps: [] };
+  return { name: "", trigger_type: "email_list_joined", list_id: "", is_active: true, steps: [] };
 }
 
 export function SequencesManager() {
@@ -97,9 +106,14 @@ export function SequencesManager() {
         sRes.json(),
         tRes.json(),
       ]);
+      const EMAIL_TRIGGERS = new Set<SequenceTriggerType>([
+        "email_list_joined",
+        "email_opened",
+        "email_clicked",
+      ]);
       setSequences(
-        ((aData.automations as Automation[]) ?? []).filter(
-          (a) => a.trigger_type === "email_list_joined",
+        ((aData.automations as Automation[]) ?? []).filter((a) =>
+          EMAIL_TRIGGERS.has(a.trigger_type as SequenceTriggerType),
         ),
       );
       setLists(lData.lists ?? []);
@@ -132,6 +146,7 @@ export function SequencesManager() {
     setDraft({
       id: seq.id,
       name: seq.name,
+      trigger_type: seq.trigger_type as SequenceTriggerType,
       list_id: seq.trigger_config?.list_id ?? "",
       is_active: seq.is_active,
       steps,
@@ -174,7 +189,7 @@ export function SequencesManager() {
       toast.error("Ponele un nombre a la secuencia.");
       return;
     }
-    if (!draft.list_id) {
+    if (draft.trigger_type === "email_list_joined" && !draft.list_id) {
       toast.error("Elegí qué lista dispara la secuencia.");
       return;
     }
@@ -193,8 +208,8 @@ export function SequencesManager() {
     try {
       const payload = {
         name: draft.name.trim(),
-        trigger_type: "email_list_joined",
-        trigger_config: { list_id: draft.list_id },
+        trigger_type: draft.trigger_type,
+        trigger_config: draft.list_id ? { list_id: draft.list_id } : {},
         is_active: draft.is_active,
         steps: draft.steps,
       };
@@ -254,19 +269,19 @@ export function SequencesManager() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Secuencias</h2>
           <p className="text-sm text-muted-foreground">
-            Automatizaciones de email: cuando alguien se une a una lista, enviá una serie de
-            emails con demoras entre pasos.
+            Automatizaciones de email: cuando alguien se une a una lista, abre o hace clic en un
+            email, enviá una serie de emails con demoras entre pasos.
           </p>
         </div>
-        <Button onClick={openCreate} disabled={lists.length === 0 || templates.length === 0}>
+        <Button onClick={openCreate} disabled={templates.length === 0}>
           <Plus className="mr-1 h-4 w-4" />
           Nueva secuencia
         </Button>
       </div>
 
-      {(lists.length === 0 || templates.length === 0) && (
+      {templates.length === 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Necesitás al menos una lista y una plantilla para crear una secuencia.
+          Necesitás al menos una plantilla para crear una secuencia.
         </p>
       )}
 
@@ -291,7 +306,10 @@ export function SequencesManager() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">{seq.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  Lista: {listName(seq.trigger_config?.list_id)} · {seq.execution_count} ejecuciones
+                  {TRIGGER_LABEL[seq.trigger_type as SequenceTriggerType] ?? seq.trigger_type}
+                  {seq.trigger_config?.list_id ? ` — ${listName(seq.trigger_config.list_id)}` : " — cualquier lista"}
+                  {" · "}
+                  {seq.execution_count} ejecuciones
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
@@ -329,14 +347,47 @@ export function SequencesManager() {
                 />
               </div>
               <div>
-                <Label className="mb-1 block text-xs text-muted-foreground">
-                  Disparador: se une a la lista
-                </Label>
-                <Select value={draft.list_id} onValueChange={(v) => v && setDraft({ ...draft, list_id: v })}>
+                <Label className="mb-1 block text-xs text-muted-foreground">Disparador</Label>
+                <Select
+                  value={draft.trigger_type}
+                  onValueChange={(v) =>
+                    v && setDraft({ ...draft, trigger_type: v as SequenceTriggerType })
+                  }
+                >
                   <SelectTrigger className="w-full">
-                    <SelectValue>{listName(draft.list_id) || "Elegir lista"}</SelectValue>
+                    <SelectValue>{TRIGGER_LABEL[draft.trigger_type]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
+                    {(Object.keys(TRIGGER_LABEL) as SequenceTriggerType[]).map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {TRIGGER_LABEL[t]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="mb-1 block text-xs text-muted-foreground">
+                  {draft.trigger_type === "email_list_joined"
+                    ? "Lista"
+                    : "Lista (opcional — vacío = cualquier lista)"}
+                </Label>
+                <Select
+                  value={draft.list_id || "__any__"}
+                  onValueChange={(v) =>
+                    setDraft({ ...draft, list_id: v && v !== "__any__" ? v : "" })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {draft.list_id ? listName(draft.list_id) : "Cualquier lista"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {draft.trigger_type !== "email_list_joined" && (
+                      <SelectItem value="__any__">Cualquier lista</SelectItem>
+                    )}
                     {lists.map((l) => (
                       <SelectItem key={l.id} value={l.id}>
                         {l.name}

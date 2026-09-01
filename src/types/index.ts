@@ -472,7 +472,12 @@ export type AutomationTriggerType =
    *  it has its own lightweight "Secuencias" UI (see
    *  src/components/email/sequences-manager.tsx) that creates rows in
    *  these same automations/automation_steps tables. */
-  | 'email_list_joined';
+  | 'email_list_joined'
+  /** Fires the moment a tracking pixel loads for a send that belongs
+   *  to (optionally) a specific list. */
+  | 'email_opened'
+  /** Fires the moment a tracked link in a send is clicked. */
+  | 'email_clicked';
 
 export type AutomationStepType =
   | 'send_message'
@@ -528,6 +533,12 @@ export interface EmailListJoinedTriggerConfig {
   list_id: string;
 }
 
+/** email_opened / email_clicked — list_id narrows to sends from one
+ *  list; omitted, it matches any send in the account. */
+export interface EmailEngagementTriggerConfig {
+  list_id?: string;
+}
+
 export type AutomationTriggerConfig =
   | Record<string, never>
   | KeywordMatchTriggerConfig
@@ -535,6 +546,7 @@ export type AutomationTriggerConfig =
   | TimeBasedTriggerConfig
   | InteractiveReplyTriggerConfig
   | EmailListJoinedTriggerConfig
+  | EmailEngagementTriggerConfig
   | Record<string, unknown>;
 
 export interface SendMessageStepConfig {

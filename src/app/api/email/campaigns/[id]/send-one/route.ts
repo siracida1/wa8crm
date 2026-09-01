@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { wrapHtmlForTracking } from '@/lib/email/tracking'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -77,6 +78,27 @@ export async function POST(
 
   const { subject, html } = personalize(template.subject, template.html_content, recipientData)
 
+  // Log row created BEFORE sending, in 'pending' state — its id is what
+  // the tracking pixel / click-wrapped links embed, so it has to exist
+  // before the HTML goes out.
+  const { data: log, error: logError } = await admin
+    .from('email_campaign_logs')
+    .insert({
+      campaign_id: id,
+      account_id: ctx.accountId,
+      recipient: recipient.email,
+      recipient_data: recipientData,
+      subject,
+      status: 'pending',
+      attempt: 0,
+    })
+    .select('id')
+    .single()
+  if (logError || !log) {
+    return NextResponse.json({ success: false, error: 'No se pudo registrar el envío' }, { status: 500 })
+  }
+  const trackedHtml = wrapHtmlForTracking(html, log.id)
+
   const transporter = nodemailer.createTransport({
     host: sender.host,
     port: Number(sender.port),
@@ -100,7 +122,7 @@ export async function POST(
         from: `"${sender.name}" <${sender.email}>`,
         to: recipient.email,
         subject,
-        html,
+        html: trackedHtml,
       })
       result = { success: true, messageId: info.messageId }
       break
@@ -112,17 +134,15 @@ export async function POST(
     }
   }
 
-  await admin.from('email_campaign_logs').insert({
-    campaign_id: id,
-    account_id: ctx.accountId,
-    recipient: recipient.email,
-    recipient_data: recipientData,
-    subject,
-    status: result.success ? 'sent' : 'failed',
-    message_id: result.messageId ?? null,
-    error: result.error ?? null,
-    attempt,
-  })
+  await admin
+    .from('email_campaign_logs')
+    .update({
+      status: result.success ? 'sent' : 'failed',
+      message_id: result.messageId ?? null,
+      error: result.error ?? null,
+      attempt,
+    })
+    .eq('id', log.id)
 
   await admin
     .from('email_campaigns')

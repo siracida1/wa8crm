@@ -14,6 +14,7 @@ import type {
   SendWebhookStepConfig,
   SendEmailStepConfig,
   EmailListJoinedTriggerConfig,
+  EmailEngagementTriggerConfig,
   TagStepConfig,
   UpdateContactFieldStepConfig,
   WaitStepConfig,
@@ -22,6 +23,7 @@ import type {
 } from '@/types'
 import nodemailer from 'nodemailer'
 import { supabaseAdmin } from './admin-client'
+import { wrapHtmlForTracking } from '@/lib/email/tracking'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
@@ -653,6 +655,22 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const recipient = { ...(args.context.recipientData ?? {}), email: recipientEmail }
       const { subject, html } = personalizeEmail(template.subject, template.html_content, recipient)
 
+      const { data: log } = await db
+        .from('email_campaign_logs')
+        .insert({
+          automation_id: args.automation.id,
+          account_id: args.automation.account_id,
+          list_id: args.context.list_id ?? null,
+          recipient: recipientEmail,
+          recipient_data: args.context.recipientData ?? {},
+          subject,
+          status: 'pending',
+          attempt: 0,
+        })
+        .select('id')
+        .single()
+      const trackedHtml = log ? wrapHtmlForTracking(html, log.id) : html
+
       const transporter = nodemailer.createTransport({
         host: sender.host,
         port: Number(sender.port),
@@ -662,13 +680,31 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         greetingTimeout: 15000,
         socketTimeout: 30000,
       })
-      const info = await transporter.sendMail({
-        from: `"${sender.name}" <${sender.email}>`,
-        to: recipientEmail,
-        subject,
-        html,
-      })
-      return `email sent to ${recipientEmail} (${info.messageId})`
+
+      try {
+        const info = await transporter.sendMail({
+          from: `"${sender.name}" <${sender.email}>`,
+          to: recipientEmail,
+          subject,
+          html: trackedHtml,
+        })
+        if (log) {
+          await db
+            .from('email_campaign_logs')
+            .update({ status: 'sent', message_id: info.messageId, attempt: 1 })
+            .eq('id', log.id)
+        }
+        return `email sent to ${recipientEmail} (${info.messageId})`
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (log) {
+          await db
+            .from('email_campaign_logs')
+            .update({ status: 'failed', error: msg, attempt: 1 })
+            .eq('id', log.id)
+        }
+        throw err
+      }
     }
 
     case 'close_conversation': {
@@ -795,6 +831,13 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
   if (automation.trigger_type === 'email_list_joined') {
     const cfg = automation.trigger_config as EmailListJoinedTriggerConfig
     return Boolean(ctx?.list_id && cfg?.list_id && cfg.list_id === ctx.list_id)
+  }
+
+  if (automation.trigger_type === 'email_opened' || automation.trigger_type === 'email_clicked') {
+    const cfg = automation.trigger_config as EmailEngagementTriggerConfig
+    // No list_id configured → matches any send in the account.
+    if (!cfg?.list_id) return true
+    return cfg.list_id === ctx?.list_id
   }
 
   return true

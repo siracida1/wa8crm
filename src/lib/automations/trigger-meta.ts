@@ -47,6 +47,14 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
     label: 'Joined Email List',
     pillClass: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
   },
+  email_opened: {
+    label: 'Email Opened',
+    pillClass: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+  },
+  email_clicked: {
+    label: 'Email Link Clicked',
+    pillClass: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+  },
 }
 
 export function triggerMeta(t: AutomationTriggerType | string): TriggerMeta {
