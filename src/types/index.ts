@@ -465,7 +465,14 @@ export type AutomationTriggerType =
   | 'time_based'
   /** Customer tapped a reply button / list row whose id matches; lets
    *  multi-step menus be chained across automations. */
-  | 'interactive_reply';
+  | 'interactive_reply'
+  /** Email Marketing module: fires once per recipient when they're
+   *  added to a specific `email_lists` row (CSV import or manual add).
+   *  Not exposed in the WhatsApp automation builder's trigger picker —
+   *  it has its own lightweight "Secuencias" UI (see
+   *  src/components/email/sequences-manager.tsx) that creates rows in
+   *  these same automations/automation_steps tables. */
+  | 'email_list_joined';
 
 export type AutomationStepType =
   | 'send_message'
@@ -480,7 +487,11 @@ export type AutomationStepType =
   | 'wait'
   | 'condition'
   | 'send_webhook'
-  | 'close_conversation';
+  | 'close_conversation'
+  /** Email Marketing module — sends one campaign-style email to the
+   *  recipient bound to this run (`AutomationContext.recipientEmail`),
+   *  not a WhatsApp contact. */
+  | 'send_email';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 
@@ -513,12 +524,17 @@ export interface InteractiveReplyTriggerConfig {
   reply_ids: string[];
 }
 
+export interface EmailListJoinedTriggerConfig {
+  list_id: string;
+}
+
 export type AutomationTriggerConfig =
   | Record<string, never>
   | KeywordMatchTriggerConfig
   | TagTriggerConfig
   | TimeBasedTriggerConfig
   | InteractiveReplyTriggerConfig
+  | EmailListJoinedTriggerConfig
   | Record<string, unknown>;
 
 export interface SendMessageStepConfig {
@@ -593,6 +609,12 @@ export interface SendWebhookStepConfig {
   body_template?: string;
 }
 
+export interface SendEmailStepConfig {
+  /** Falls back to the account's default sender when omitted. */
+  sender_id?: string;
+  template_id: string;
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendButtonsStepConfig
@@ -605,6 +627,7 @@ export type AutomationStepConfig =
   | WaitStepConfig
   | ConditionStepConfig
   | SendWebhookStepConfig
+  | SendEmailStepConfig
   | Record<string, never>
   | Record<string, unknown>;
 

@@ -12,12 +12,15 @@ import type {
   SendListStepConfig,
   SendTemplateStepConfig,
   SendWebhookStepConfig,
+  SendEmailStepConfig,
+  EmailListJoinedTriggerConfig,
   TagStepConfig,
   UpdateContactFieldStepConfig,
   WaitStepConfig,
   CreateDealStepConfig,
   AssignConversationStepConfig,
 } from '@/types'
+import nodemailer from 'nodemailer'
 import { supabaseAdmin } from './admin-client'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
@@ -42,6 +45,14 @@ export interface AutomationContext {
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
+  /** Email Marketing module — the `email_lists` row this run is bound
+   *  to, for email_list_joined matching. */
+  list_id?: string
+  /** Email Marketing module — the recipient's address and their mapped
+   *  CSV columns, for send_email steps (there's no WhatsApp `contactId`
+   *  for an email-only run). */
+  recipientEmail?: string
+  recipientData?: Record<string, string>
 }
 
 export interface DispatchInput {
@@ -609,6 +620,57 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       return `webhook ${res.status}`
     }
 
+    case 'send_email': {
+      const cfg = step.step_config as SendEmailStepConfig
+      const recipientEmail = args.context.recipientEmail
+      if (!recipientEmail) throw new Error('send_email needs a recipient email')
+      if (!cfg.template_id) throw new Error('send_email needs template_id')
+
+      const [{ data: template }, { data: sender }] = await Promise.all([
+        db
+          .from('email_templates')
+          .select('subject, html_content')
+          .eq('id', cfg.template_id)
+          .eq('account_id', args.automation.account_id)
+          .maybeSingle(),
+        cfg.sender_id
+          ? db
+              .from('email_senders')
+              .select('name, email, host, port, smtp_user, smtp_password')
+              .eq('id', cfg.sender_id)
+              .eq('account_id', args.automation.account_id)
+              .maybeSingle()
+          : db
+              .from('email_senders')
+              .select('name, email, host, port, smtp_user, smtp_password')
+              .eq('account_id', args.automation.account_id)
+              .eq('is_default', true)
+              .maybeSingle(),
+      ])
+      if (!template) throw new Error('send_email: template not found')
+      if (!sender) throw new Error('send_email: no sender configured')
+
+      const recipient = { ...(args.context.recipientData ?? {}), email: recipientEmail }
+      const { subject, html } = personalizeEmail(template.subject, template.html_content, recipient)
+
+      const transporter = nodemailer.createTransport({
+        host: sender.host,
+        port: Number(sender.port),
+        secure: Number(sender.port) === 465,
+        auth: { user: sender.smtp_user, pass: sender.smtp_password },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
+      })
+      const info = await transporter.sendMail({
+        from: `"${sender.name}" <${sender.email}>`,
+        to: recipientEmail,
+        subject,
+        html,
+      })
+      return `email sent to ${recipientEmail} (${info.messageId})`
+    }
+
     case 'close_conversation': {
       if (!args.contactId) throw new Error('close_conversation needs a contact')
       await db
@@ -730,6 +792,11 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
     return Boolean(tagId && cfg?.tag_id && cfg.tag_id === tagId)
   }
 
+  if (automation.trigger_type === 'email_list_joined') {
+    const cfg = automation.trigger_config as EmailListJoinedTriggerConfig
+    return Boolean(ctx?.list_id && cfg?.list_id && cfg.list_id === ctx.list_id)
+  }
+
   return true
 }
 
@@ -788,6 +855,23 @@ async function evaluateCondition(cfg: ConditionStepConfig, args: ExecuteArgs): P
 function waitMs(cfg: WaitStepConfig): number {
   const unitMs = cfg.unit === 'days' ? 86_400_000 : cfg.unit === 'hours' ? 3_600_000 : 60_000
   return Math.max(1_000, cfg.amount * unitMs)
+}
+
+/** Same {{key}} substitution the campaign wizard's send-one route uses,
+ *  duplicated here rather than imported — that route lives under
+ *  `src/app/api/...` and this module needs to stay importable from
+ *  non-Next.js contexts (tests, the cron endpoint). */
+function personalizeEmail(subject: string, html: string, recipient: Record<string, string>) {
+  const escapeRegExp = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let s = subject
+  let h = html
+  for (const key of Object.keys(recipient)) {
+    const regex = new RegExp(`{{${escapeRegExp(key)}}}`, 'g')
+    s = s.replace(regex, recipient[key] ?? '')
+    h = h.replace(regex, recipient[key] ?? '')
+  }
+  h = h.replace(/{{name}}/g, recipient.name || recipient.nombre || 'Cliente')
+  return { subject: s, html: h }
 }
 
 function interpolate(s: string, args: ExecuteArgs): string {

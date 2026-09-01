@@ -146,6 +146,11 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
     case 'close_conversation':
       // No config required.
       break
+    case 'send_email':
+      if (!nonEmpty(c.template_id)) {
+        issues.push({ path: `${path}.template_id`, message: 'template is required' })
+      }
+      break
     default:
       issues.push({ path, message: `unknown step type: ${step.step_type}` })
   }
@@ -189,6 +194,10 @@ export function validateTriggerForActivation(
   } else if (triggerType === 'tag_added') {
     if (!nonEmpty(cfg.tag_id)) {
       issues.push({ path: 'trigger.tag_id', message: 'tag is required' })
+    }
+  } else if (triggerType === 'email_list_joined') {
+    if (!nonEmpty(cfg.list_id)) {
+      issues.push({ path: 'trigger.list_id', message: 'list is required' })
     }
   } else if (triggerType === 'interactive_reply') {
     const ids = cfg.reply_ids

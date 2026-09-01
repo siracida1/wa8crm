@@ -113,6 +113,7 @@ const emailNavItems: NavItem[] = [
   { href: "/email/templates", labelKey: "emailTemplates", icon: FileText },
   { href: "/email/lists", labelKey: "emailLists", icon: Users },
   { href: "/email/campaigns", labelKey: "emailCampaigns", icon: Send },
+  { href: "/email/sequences", labelKey: "emailSequences", icon: Workflow },
 ];
 
 const bottomNavItems = [

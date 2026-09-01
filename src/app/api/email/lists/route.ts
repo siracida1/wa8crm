@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { runAutomationsForTrigger } from '@/lib/automations/engine'
 
 interface RecipientInput {
   email: string
@@ -84,6 +85,29 @@ export async function POST(request: Request) {
     // leave an empty, unusable list behind.
     await admin.from('email_lists').delete().eq('id', list.id)
     return NextResponse.json({ error: recipientsError.message }, { status: 500 })
+  }
+
+  // Fire email_list_joined once per recipient — cheap early exit when
+  // the account has no active sequence listening, so bulk imports on
+  // accounts not using this feature pay no extra cost. Awaited (not
+  // fire-and-forget) since this runs in a serverless function that may
+  // freeze the moment the response is sent.
+  const { count: activeCount } = await admin
+    .from('automations')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', ctx.accountId)
+    .eq('trigger_type', 'email_list_joined')
+    .eq('is_active', true)
+  if (activeCount && activeCount > 0) {
+    await Promise.all(
+      rows.map((row) =>
+        runAutomationsForTrigger({
+          accountId: ctx.accountId,
+          triggerType: 'email_list_joined',
+          context: { list_id: list.id, recipientEmail: row.email, recipientData: row.data },
+        }),
+      ),
+    )
   }
 
   return NextResponse.json({ list: { ...list, recipient_count: rows.length } }, { status: 201 })

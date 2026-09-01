@@ -33,6 +33,7 @@ import {
   ArrowUp,
   MousePointerClick,
   List,
+  Mail,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -120,6 +121,10 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   condition: { label: "condition", icon: GitBranch, border: "border-l-amber-500" },
   send_webhook: { label: "send_webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "close_conversation", icon: CircleSlash, border: "border-l-primary" },
+  // Email Marketing module — not in ADDABLE_STEPS below, so it never
+  // appears in this (WhatsApp) builder's palette. Present only to keep
+  // this Record<AutomationStepType, ...> exhaustive.
+  send_email: { label: "send_email", icon: Mail, border: "border-l-primary" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [

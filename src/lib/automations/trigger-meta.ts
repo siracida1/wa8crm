@@ -39,6 +39,14 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
     label: 'Button / List Reply',
     pillClass: 'border-pink-500/30 bg-pink-500/10 text-pink-300',
   },
+  // Email Marketing module — not offered in the WhatsApp builder's
+  // trigger picker (TRIGGER_OPTIONS below deliberately omits it); its
+  // own "Secuencias" UI never reads this map. Present only so this
+  // Record<AutomationTriggerType, ...> stays exhaustive.
+  email_list_joined: {
+    label: 'Joined Email List',
+    pillClass: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+  },
 }
 
 export function triggerMeta(t: AutomationTriggerType | string): TriggerMeta {

@@ -30,6 +30,7 @@ const pageTitles: Record<string, string> = {
   "/email/templates": "emailTemplates",
   "/email/lists": "emailLists",
   "/email/campaigns": "emailCampaigns",
+  "/email/sequences": "emailSequences",
   "/automations": "automations",
   "/settings": "settings",
 };
