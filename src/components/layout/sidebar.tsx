@@ -11,11 +11,14 @@ import {
   Bell,
   Bot,
   Crown,
+  FileText,
   GitBranch,
   LayoutDashboard,
   LogOut,
+  Mail,
   MessageSquare,
   Radio,
+  Send,
   Settings,
   Shield,
   User,
@@ -89,7 +92,11 @@ interface NavItem {
   beta?: boolean;
 }
 
-const navItems: NavItem[] = [
+// Two isolated platforms share this shell (see PlatformSwitcher in the
+// header): each gets its own nav list so their tools never mix in the
+// same menu. Which list renders is decided by the current pathname
+// below — WhatsApp CRM items vs. the Email Marketing (EMKT Zittex) module.
+const whatsappNavItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
@@ -99,6 +106,13 @@ const navItems: NavItem[] = [
   { href: "/automations", labelKey: "automations", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
+];
+
+const emailNavItems: NavItem[] = [
+  { href: "/email", labelKey: "emailAccounts", icon: Mail },
+  { href: "/email/templates", labelKey: "emailTemplates", icon: FileText },
+  { href: "/email/lists", labelKey: "emailLists", icon: Users },
+  { href: "/email/campaigns", labelKey: "emailCampaigns", icon: Send },
 ];
 
 const bottomNavItems = [
@@ -132,6 +146,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     !profileLoading &&
     !!account?.name &&
     account.name !== profile?.full_name;
+
+  const isEmailPlatform = pathname.startsWith("/email");
+  const navItems = isEmailPlatform ? emailNavItems : whatsappNavItems;
 
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.
@@ -188,12 +205,19 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link
+            href={isEmailPlatform ? "/email" : "/dashboard"}
+            className="flex items-center gap-2"
+          >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
+              {isEmailPlatform ? (
+                <Mail className="h-4 w-4" />
+              ) : (
+                <MessageSquare className="h-4 w-4" />
+              )}
             </div>
             <span className="text-sm font-semibold text-foreground">
-              {t("title")}
+              {isEmailPlatform ? t("titleEmail") : t("title")}
             </span>
           </Link>
           <button
@@ -216,9 +240,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
+              // "/dashboard" and "/email" are each their section's index
+              // route — other items in the same section start with that
+              // same string ("/email/templates" starts with "/email"), so
+              // both would light up together under naive prefix matching.
+              // Exact-match those two; prefix-match the rest so a future
+              // detail sub-route (e.g. "/email/campaigns/123") still keeps
+              // its parent nav item highlighted.
               const isActive =
                 pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                (item.href !== "/dashboard" &&
+                  item.href !== "/email" &&
+                  pathname.startsWith(item.href));
 
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;

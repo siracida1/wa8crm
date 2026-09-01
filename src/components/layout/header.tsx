@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { PlatformSwitcher } from "@/components/layout/platform-switcher";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -25,6 +26,10 @@ const pageTitles: Record<string, string> = {
   "/contacts": "contacts",
   "/pipelines": "pipelines",
   "/broadcasts": "broadcasts",
+  "/email": "emailAccounts",
+  "/email/templates": "emailTemplates",
+  "/email/lists": "emailLists",
+  "/email/campaigns": "emailCampaigns",
   "/automations": "automations",
   "/settings": "settings",
 };
@@ -74,6 +79,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <PlatformSwitcher />
         <ModeToggle />
 
         <DropdownMenu>
