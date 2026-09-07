@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Papa from "papaparse";
 import DOMPurify from "dompurify";
 import {
@@ -13,6 +14,7 @@ import {
   Plus,
   Rocket,
   Send,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -136,6 +138,20 @@ export function CampaignsManager() {
     [refresh],
   );
 
+  const deleteCampaign = useCallback(
+    async (id: string) => {
+      if (!window.confirm("¿Borrar esta campaña y su historial de envíos?")) return;
+      const res = await fetch(`/api/email/campaigns/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("No se pudo borrar la campaña.");
+        return;
+      }
+      toast.success("Campaña borrada.");
+      await refresh();
+    },
+    [refresh],
+  );
+
   if (view === "wizard") {
     return (
       <Wizard
@@ -179,12 +195,12 @@ export function CampaignsManager() {
               key={c.id}
               className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4"
             >
-              <div className="min-w-0">
+              <Link href={`/email/campaigns/${c.id}`} className="min-w-0 hover:opacity-80">
                 <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {new Date(c.created_at).toLocaleString()}
                 </p>
-              </div>
+              </Link>
               <div className="flex shrink-0 items-center gap-4 text-xs">
                 <span className="text-emerald-400">{c.sent_count} enviados</span>
                 {c.failed_count > 0 && <span className="text-red-400">{c.failed_count} fallidos</span>}
@@ -203,6 +219,14 @@ export function CampaignsManager() {
                     Cancelar
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => deleteCampaign(c.id)}
+                  className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </div>
           ))}

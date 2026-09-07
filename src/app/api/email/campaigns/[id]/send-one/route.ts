@@ -4,6 +4,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
 import { appendSignature } from '@/lib/email/signature'
+import { appendUnsubscribeFooter, isUnsubscribed } from '@/lib/email/unsubscribe'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -67,6 +68,24 @@ export async function POST(
     return NextResponse.json({ success: false, cancelled: true, error: 'Campaña cancelada' })
   }
 
+  if (await isUnsubscribed(admin, ctx.accountId, recipient.email)) {
+    await admin.from('email_campaign_logs').insert({
+      campaign_id: id,
+      account_id: ctx.accountId,
+      recipient: recipient.email,
+      recipient_data: recipientData,
+      subject: '(omitido — dado de baja)',
+      status: 'failed',
+      error: 'Destinatario dado de baja',
+      attempt: 0,
+    })
+    await admin
+      .from('email_campaigns')
+      .update({ failed_count: campaign.failed_count + 1 })
+      .eq('id', id)
+    return NextResponse.json({ success: false, unsubscribed: true, error: 'Destinatario dado de baja' })
+  }
+
   const [{ data: sender }, { data: template }] = await Promise.all([
     admin
       .from('email_senders')
@@ -105,7 +124,7 @@ export async function POST(
   if (logError || !log) {
     return NextResponse.json({ success: false, error: 'No se pudo registrar el envío' }, { status: 500 })
   }
-  const trackedHtml = wrapHtmlForTracking(html, log.id)
+  const trackedHtml = appendUnsubscribeFooter(wrapHtmlForTracking(html, log.id), log.id)
 
   const transporter = nodemailer.createTransport({
     host: sender.host,

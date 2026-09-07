@@ -25,6 +25,7 @@ import nodemailer from 'nodemailer'
 import { supabaseAdmin } from './admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
 import { appendSignature } from '@/lib/email/signature'
+import { appendUnsubscribeFooter, isUnsubscribed } from '@/lib/email/unsubscribe'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
@@ -629,6 +630,10 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!recipientEmail) throw new Error('send_email needs a recipient email')
       if (!cfg.template_id) throw new Error('send_email needs template_id')
 
+      if (await isUnsubscribed(db, args.automation.account_id, recipientEmail)) {
+        return `skipped ${recipientEmail} — unsubscribed`
+      }
+
       const [{ data: template }, { data: sender }] = await Promise.all([
         db
           .from('email_templates')
@@ -675,7 +680,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         })
         .select('id')
         .single()
-      const trackedHtml = log ? wrapHtmlForTracking(html, log.id) : html
+      const trackedHtml = log
+        ? appendUnsubscribeFooter(wrapHtmlForTracking(html, log.id), log.id)
+        : html
 
       const transporter = nodemailer.createTransport({
         host: sender.host,
