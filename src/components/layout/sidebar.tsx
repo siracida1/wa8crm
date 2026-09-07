@@ -21,6 +21,7 @@ import {
   Radio,
   Send,
   Settings,
+  ShieldCheck,
   Shield,
   User,
   UserCog,
@@ -116,6 +117,7 @@ const emailNavItems: NavItem[] = [
   { href: "/email/lists", labelKey: "emailLists", icon: Users },
   { href: "/email/campaigns", labelKey: "emailCampaigns", icon: Send },
   { href: "/email/sequences", labelKey: "emailSequences", icon: Workflow },
+  { href: "/email/deliverability", labelKey: "emailDeliverability", icon: ShieldCheck },
 ];
 
 const bottomNavItems = [
