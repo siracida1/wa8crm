@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { appendSignature } from '@/lib/email/signature'
 
 // Sends a reply from within a thread using that mailbox's own SMTP
 // credentials, threaded via In-Reply-To/References against the last
@@ -39,11 +40,13 @@ export async function POST(request: Request) {
 
   const { data: sender } = await admin
     .from('email_senders')
-    .select('name, email, host, port, smtp_user, smtp_password')
+    .select('name, email, host, port, smtp_user, smtp_password, signature_html')
     .eq('id', senderId)
     .eq('account_id', ctx.accountId)
     .maybeSingle()
   if (!sender) return NextResponse.json({ error: 'Cuenta de envío no encontrada' }, { status: 404 })
+
+  const signedHtml = appendSignature(html, sender.signature_html)
 
   const { data: lastInbound } = await admin
     .from('email_inbox_messages')
@@ -71,7 +74,7 @@ export async function POST(request: Request) {
       from: `"${sender.name}" <${sender.email}>`,
       to,
       subject,
-      html,
+      html: signedHtml,
       inReplyTo: lastInbound?.message_id ?? undefined,
       references: lastInbound?.message_id ?? undefined,
     })
@@ -96,7 +99,7 @@ export async function POST(request: Request) {
     from_name: sender.name,
     to_email: to,
     subject,
-    body_html: html,
+    body_html: signedHtml,
     direction: 'outbound',
     is_read: true,
     received_at: new Date().toISOString(),

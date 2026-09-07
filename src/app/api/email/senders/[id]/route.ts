@@ -43,6 +43,7 @@ export async function PATCH(
   if (typeof body.imap_password === 'string' && body.imap_password.length > 0) {
     update.imap_password = body.imap_password
   }
+  if (typeof body.signature_html === 'string') update.signature_html = body.signature_html || null
   update.updated_at = new Date().toISOString()
 
   const admin = supabaseAdmin()

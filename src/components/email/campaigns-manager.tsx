@@ -52,7 +52,7 @@ interface Recipient {
 interface Campaign {
   id: string;
   name: string;
-  status: "sending" | "completed" | "failed";
+  status: "sending" | "completed" | "failed" | "cancelled";
   total_recipients: number;
   sent_count: number;
   failed_count: number;
@@ -75,8 +75,15 @@ function personalize(subject: string, html: string, recipient: Recipient) {
 
 function statusColor(status: Campaign["status"]) {
   if (status === "completed") return "text-emerald-400 bg-emerald-500/10";
-  if (status === "failed") return "text-red-400 bg-red-500/10";
+  if (status === "failed" || status === "cancelled") return "text-red-400 bg-red-500/10";
   return "text-primary bg-primary/10";
+}
+
+function statusLabel(status: Campaign["status"]) {
+  if (status === "sending") return "enviando";
+  if (status === "completed") return "completada";
+  if (status === "cancelled") return "cancelada";
+  return "con errores";
 }
 
 export function CampaignsManager() {
@@ -84,20 +91,50 @@ export function CampaignsManager() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const refresh = useCallback(async () => {
+    const res = await fetch("/api/email/campaigns", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setCampaigns((data.campaigns as Campaign[]) ?? []);
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/email/campaigns", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setCampaigns((data.campaigns as Campaign[]) ?? []);
+      await refresh();
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live progress: while any campaign is still sending, poll for updated
+  // sent/failed counts so "Cancelar" isn't the only way to see it move.
+  useEffect(() => {
+    if (view !== "list" || !campaigns.some((c) => c.status === "sending")) return;
+    const interval = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(interval);
+  }, [view, campaigns, refresh]);
+
+  const cancelCampaign = useCallback(
+    async (id: string) => {
+      if (!window.confirm("¿Cancelar esta campaña? Los envíos ya realizados no se deshacen.")) return;
+      const res = await fetch(`/api/email/campaigns/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (!res.ok) {
+        toast.error("No se pudo cancelar la campaña.");
+        return;
+      }
+      toast.success("Campaña cancelada.");
+      await refresh();
+    },
+    [refresh],
+  );
 
   if (view === "wizard") {
     return (
@@ -153,8 +190,19 @@ export function CampaignsManager() {
                 {c.failed_count > 0 && <span className="text-red-400">{c.failed_count} fallidos</span>}
                 <span className="text-muted-foreground">/ {c.total_recipients}</span>
                 <span className={`rounded-full px-2 py-0.5 font-medium ${statusColor(c.status)}`}>
-                  {c.status === "sending" ? "enviando" : c.status === "completed" ? "completada" : "con errores"}
+                  {statusLabel(c.status)}
                 </span>
+                {c.status === "sending" && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => cancelCampaign(c.id)}
+                    className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Cancelar
+                  </Button>
+                )}
               </div>
             </div>
           ))}
@@ -301,6 +349,8 @@ function Wizard({ onCancel, onComplete }: { onCancel: () => void; onComplete: ()
     let failed = 0;
     const delay = Number(sendDelayMs);
 
+    let wasCancelled = false;
+
     for (let i = 0; i < recipients.length; i++) {
       if (cancelledRef.current) break;
       const recipient = recipients[i];
@@ -311,6 +361,14 @@ function Wizard({ onCancel, onComplete }: { onCancel: () => void; onComplete: ()
           body: JSON.stringify({ recipient }),
         });
         const result = await sendRes.json().catch(() => ({ success: false }));
+        // The server is the actual kill switch — it refuses to send once
+        // the campaign's been cancelled from another tab/session, which
+        // is the only way "Cancelar campaña" can stop a loop that's
+        // running here in the browser.
+        if (result.cancelled) {
+          wasCancelled = true;
+          break;
+        }
         if (result.success) sent++;
         else failed++;
       } catch {
@@ -323,11 +381,13 @@ function Wizard({ onCancel, onComplete }: { onCancel: () => void; onComplete: ()
       }
     }
 
-    await fetch(`/api/email/campaigns/${campaignId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: failed > 0 ? "failed" : "completed" }),
-    });
+    if (!wasCancelled) {
+      await fetch(`/api/email/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: failed > 0 ? "failed" : "completed" }),
+      });
+    }
 
     setTimeout(() => onComplete(), 1200);
     // eslint-disable-next-line react-hooks/exhaustive-deps

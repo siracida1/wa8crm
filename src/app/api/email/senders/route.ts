@@ -11,7 +11,7 @@ export async function GET() {
     const { supabase } = await getCurrentAccount()
     const { data, error } = await supabase
       .from('email_senders')
-      .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, created_at')
+      .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, created_at')
       .order('created_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ senders: data ?? [] })
@@ -79,8 +79,9 @@ export async function POST(request: Request) {
       imap_port: hasImap ? imap_port : null,
       imap_user: hasImap ? imap_user : null,
       imap_password: hasImap ? imap_password : null,
+      signature_html: typeof body.signature_html === 'string' ? body.signature_html : null,
     })
-    .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, created_at')
+    .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

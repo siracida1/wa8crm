@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Loader2, Mail, Pencil, Plus, Server, ShieldCheck, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image as ImageIcon, Loader2, Mail, Pencil, Plus, Server, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { uploadAccountMedia, MEDIA_MAX_BYTES_BY_KIND } from "@/lib/storage/upload-media";
 
 interface EmailSender {
   id: string;
@@ -27,6 +29,7 @@ interface EmailSender {
   imap_host: string | null;
   imap_port: number | null;
   imap_user: string | null;
+  signature_html: string | null;
   created_at: string;
 }
 
@@ -43,6 +46,7 @@ interface DraftState {
   imap_port: number | "";
   imap_user: string;
   imap_password: string;
+  signature_html: string;
 }
 
 function emptyDraft(hasSenders: boolean): DraftState {
@@ -58,6 +62,7 @@ function emptyDraft(hasSenders: boolean): DraftState {
     imap_port: "",
     imap_user: "",
     imap_password: "",
+    signature_html: "",
   };
 }
 
@@ -69,6 +74,8 @@ export function SendersManager() {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [saving, setSaving] = useState(false);
   const [test, setTest] = useState<TestState>({ status: "idle", message: "" });
+  const [uploadingSignatureImage, setUploadingSignatureImage] = useState(false);
+  const signatureFileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +112,7 @@ export function SendersManager() {
       imap_port: s.imap_port ?? "",
       imap_user: s.imap_user ?? "",
       imap_password: "",
+      signature_html: s.signature_html ?? "",
     });
   };
 
@@ -185,6 +193,27 @@ export function SendersManager() {
       setTest({ status: "error", message: "Fallo la conexión." });
     }
   }, [draft]);
+
+  const uploadSignatureImage = useCallback(
+    async (file: File) => {
+      if (!draft) return;
+      if (file.size > MEDIA_MAX_BYTES_BY_KIND.image) {
+        toast.error("La imagen no puede superar los 5 MB.");
+        return;
+      }
+      setUploadingSignatureImage(true);
+      try {
+        const { publicUrl } = await uploadAccountMedia("email-media", file);
+        const img = `<img src="${publicUrl}" alt="" style="max-width:300px;display:block" />`;
+        setDraft({ ...draft, signature_html: `${draft.signature_html}${img}` });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo subir la imagen.");
+      } finally {
+        setUploadingSignatureImage(false);
+      }
+    },
+    [draft],
+  );
 
   return (
     <div>
@@ -383,6 +412,46 @@ export function SendersManager() {
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-foreground">Firma (opcional)</p>
+                  <input
+                    ref={signatureFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadSignatureImage(file);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => signatureFileInputRef.current?.click()}
+                    disabled={uploadingSignatureImage}
+                  >
+                    {uploadingSignatureImage ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ImageIcon className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    Subir imagen
+                  </Button>
+                </div>
+                <Textarea
+                  value={draft.signature_html}
+                  onChange={(e) => setDraft({ ...draft, signature_html: e.target.value })}
+                  placeholder="Saludos,&#10;Mauricio&#10;Zittex"
+                  className="min-h-20 font-mono text-xs"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Se agrega al final de cada email que mandes desde esta cuenta. Podés escribir
+                  HTML o texto simple.
+                </p>
               </div>
 
               <div className="rounded-lg border border-border bg-muted/30 p-3">

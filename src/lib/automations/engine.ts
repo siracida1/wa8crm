@@ -24,6 +24,7 @@ import type {
 import nodemailer from 'nodemailer'
 import { supabaseAdmin } from './admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
+import { appendSignature } from '@/lib/email/signature'
 import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
@@ -638,13 +639,13 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         cfg.sender_id
           ? db
               .from('email_senders')
-              .select('name, email, host, port, smtp_user, smtp_password')
+              .select('name, email, host, port, smtp_user, smtp_password, signature_html')
               .eq('id', cfg.sender_id)
               .eq('account_id', args.automation.account_id)
               .maybeSingle()
           : db
               .from('email_senders')
-              .select('name, email, host, port, smtp_user, smtp_password')
+              .select('name, email, host, port, smtp_user, smtp_password, signature_html')
               .eq('account_id', args.automation.account_id)
               .eq('is_default', true)
               .maybeSingle(),
@@ -653,7 +654,12 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!sender) throw new Error('send_email: no sender configured')
 
       const recipient = { ...(args.context.recipientData ?? {}), email: recipientEmail }
-      const { subject, html } = personalizeEmail(template.subject, template.html_content, recipient)
+      const { subject, html: personalizedHtml } = personalizeEmail(
+        template.subject,
+        template.html_content,
+        recipient,
+      )
+      const html = appendSignature(personalizedHtml, sender.signature_html)
 
       const { data: log } = await db
         .from('email_campaign_logs')

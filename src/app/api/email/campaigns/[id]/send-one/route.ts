@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
+import { appendSignature } from '@/lib/email/signature'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -52,18 +53,24 @@ export async function POST(
 
   const { data: campaign, error: campaignError } = await admin
     .from('email_campaigns')
-    .select('id, sender_id, template_id, send_delay_ms, max_retries, sent_count, failed_count')
+    .select('id, status, sender_id, template_id, send_delay_ms, max_retries, sent_count, failed_count')
     .eq('id', id)
     .eq('account_id', ctx.accountId)
     .maybeSingle()
   if (campaignError || !campaign) {
     return NextResponse.json({ error: 'Campaña no encontrada' }, { status: 404 })
   }
+  // The actual kill switch for "Cancelar campaña": the wizard's send
+  // loop lives in a browser tab and has no way to know it was cancelled
+  // from elsewhere except by this check failing on its next call.
+  if (campaign.status !== 'sending') {
+    return NextResponse.json({ success: false, cancelled: true, error: 'Campaña cancelada' })
+  }
 
   const [{ data: sender }, { data: template }] = await Promise.all([
     admin
       .from('email_senders')
-      .select('name, email, host, port, smtp_user, smtp_password')
+      .select('name, email, host, port, smtp_user, smtp_password, signature_html')
       .eq('id', campaign.sender_id)
       .maybeSingle(),
     admin
@@ -76,7 +83,8 @@ export async function POST(
     return NextResponse.json({ error: 'Falta la cuenta de envío o la plantilla' }, { status: 400 })
   }
 
-  const { subject, html } = personalize(template.subject, template.html_content, recipientData)
+  const { subject, html: personalizedHtml } = personalize(template.subject, template.html_content, recipientData)
+  const html = appendSignature(personalizedHtml, sender.signature_html)
 
   // Log row created BEFORE sending, in 'pending' state — its id is what
   // the tracking pixel / click-wrapped links embed, so it has to exist
