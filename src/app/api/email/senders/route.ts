@@ -11,7 +11,7 @@ export async function GET() {
     const { supabase } = await getCurrentAccount()
     const { data, error } = await supabase
       .from('email_senders')
-      .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, created_at')
+      .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, provider, created_at')
       .order('created_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ senders: data ?? [] })
@@ -33,10 +33,12 @@ export async function POST(request: Request) {
 
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const email = typeof body.email === 'string' ? body.email.trim() : ''
+  const provider = body.provider === 'brevo' ? 'brevo' : 'smtp'
   const host = typeof body.host === 'string' ? body.host.trim() : ''
   const port = Number(body.port)
   const smtp_user = typeof body.smtp_user === 'string' ? body.smtp_user.trim() : ''
   const smtp_password = typeof body.smtp_password === 'string' ? body.smtp_password : ''
+  const brevo_api_key = typeof body.brevo_api_key === 'string' ? body.brevo_api_key.trim() : ''
   const is_default = Boolean(body.is_default)
 
   // IMAP is optional — a sender with none of these just can't receive
@@ -53,7 +55,14 @@ export async function POST(request: Request) {
     )
   }
 
-  if (!name || !email || !host || !Number.isFinite(port) || !smtp_user || !smtp_password) {
+  if (!name || !email) {
+    return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
+  }
+  if (provider === 'brevo') {
+    if (!brevo_api_key) {
+      return NextResponse.json({ error: 'Falta la API key de Brevo' }, { status: 400 })
+    }
+  } else if (!host || !Number.isFinite(port) || !smtp_user || !smtp_password) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
   }
 
@@ -70,10 +79,12 @@ export async function POST(request: Request) {
       created_by: ctx.userId,
       name,
       email,
-      host,
-      port,
-      smtp_user,
-      smtp_password,
+      provider,
+      host: provider === 'smtp' ? host : null,
+      port: provider === 'smtp' ? port : 587,
+      smtp_user: provider === 'smtp' ? smtp_user : null,
+      smtp_password: provider === 'smtp' ? smtp_password : null,
+      brevo_api_key: provider === 'brevo' ? brevo_api_key : null,
       is_default,
       imap_host: hasImap ? imap_host : null,
       imap_port: hasImap ? imap_port : null,
@@ -81,7 +92,7 @@ export async function POST(request: Request) {
       imap_password: hasImap ? imap_password : null,
       signature_html: typeof body.signature_html === 'string' ? body.signature_html : null,
     })
-    .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, created_at')
+    .select('id, name, email, host, port, smtp_user, is_default, imap_host, imap_port, imap_user, signature_html, provider, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

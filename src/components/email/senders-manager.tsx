@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { uploadAccountMedia, MEDIA_MAX_BYTES_BY_KIND } from "@/lib/storage/upload-media";
 
+type SenderProvider = "smtp" | "brevo";
+
 interface EmailSender {
   id: string;
   name: string;
@@ -30,6 +32,7 @@ interface EmailSender {
   imap_port: number | null;
   imap_user: string | null;
   signature_html: string | null;
+  provider: SenderProvider;
   created_at: string;
 }
 
@@ -37,10 +40,12 @@ interface DraftState {
   id?: string;
   name: string;
   email: string;
+  provider: SenderProvider;
   host: string;
   port: number;
   smtp_user: string;
   smtp_password: string;
+  brevo_api_key: string;
   is_default: boolean;
   imap_host: string;
   imap_port: number | "";
@@ -53,10 +58,12 @@ function emptyDraft(hasSenders: boolean): DraftState {
   return {
     name: "",
     email: "",
+    provider: "brevo",
     host: "smtp.gmail.com",
     port: 587,
     smtp_user: "",
     smtp_password: "",
+    brevo_api_key: "",
     is_default: !hasSenders,
     imap_host: "",
     imap_port: "",
@@ -103,10 +110,12 @@ export function SendersManager() {
       id: s.id,
       name: s.name,
       email: s.email,
-      host: s.host,
-      port: s.port,
-      smtp_user: s.smtp_user,
+      provider: s.provider,
+      host: s.host ?? "smtp.gmail.com",
+      port: s.port ?? 587,
+      smtp_user: s.smtp_user ?? "",
       smtp_password: "",
+      brevo_api_key: "",
       is_default: s.is_default,
       imap_host: s.imap_host ?? "",
       imap_port: s.imap_port ?? "",
@@ -122,7 +131,12 @@ export function SendersManager() {
       toast.error("Nombre y email son obligatorios.");
       return;
     }
-    if (!draft.id && !draft.smtp_password) {
+    if (draft.provider === "brevo") {
+      if (!draft.id && !draft.brevo_api_key) {
+        toast.error("La API key de Brevo es obligatoria.");
+        return;
+      }
+    } else if (!draft.id && !draft.smtp_password) {
       toast.error("La contraseña SMTP es obligatoria.");
       return;
     }
@@ -167,7 +181,12 @@ export function SendersManager() {
 
   const runTest = useCallback(async () => {
     if (!draft) return;
-    if (!draft.id && (!draft.host || !draft.smtp_user || !draft.smtp_password)) {
+    if (draft.provider === "brevo") {
+      if (!draft.id && !draft.brevo_api_key) {
+        setTest({ status: "error", message: "Completá la API key de Brevo." });
+        return;
+      }
+    } else if (!draft.id && (!draft.host || !draft.smtp_user || !draft.smtp_password)) {
       setTest({ status: "error", message: "Completá host, usuario y contraseña." });
       return;
     }
@@ -180,7 +199,7 @@ export function SendersManager() {
         // the stored one" — send by id so the real secret never round-trips
         // through the browser.
         body: JSON.stringify(
-          draft.id && !draft.smtp_password ? { id: draft.id } : draft,
+          draft.id && !draft.smtp_password && !draft.brevo_api_key ? { id: draft.id } : draft,
         ),
       });
       const data = await res.json().catch(() => ({}));
@@ -272,20 +291,29 @@ export function SendersManager() {
                   </Button>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-md bg-muted/50 p-2">
+              {s.provider === "brevo" ? (
+                <div className="mt-3 rounded-md bg-muted/50 p-2">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Servidor
+                    Proveedor
                   </p>
-                  <p className="truncate text-xs font-medium text-foreground">{s.host}</p>
+                  <p className="truncate text-xs font-medium text-foreground">Brevo (gratis)</p>
                 </div>
-                <div className="rounded-md bg-muted/50 p-2">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Puerto
-                  </p>
-                  <p className="text-xs font-medium text-foreground">{s.port}</p>
+              ) : (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-md bg-muted/50 p-2">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Servidor
+                    </p>
+                    <p className="truncate text-xs font-medium text-foreground">{s.host}</p>
+                  </div>
+                  <div className="rounded-md bg-muted/50 p-2">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Puerto
+                    </p>
+                    <p className="text-xs font-medium text-foreground">{s.port}</p>
+                  </div>
                 </div>
-              </div>
+              )}
               {s.is_default && (
                 <div className="mt-3 flex items-center gap-1.5 text-primary">
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -323,40 +351,89 @@ export function SendersManager() {
                   />
                 </div>
               </div>
+
               <div>
-                <Label className="mb-1 block text-xs text-muted-foreground">Servidor SMTP</Label>
-                <Input
-                  value={draft.host}
-                  onChange={(e) => setDraft({ ...draft, host: e.target.value })}
-                  placeholder="smtp.gmail.com"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs text-muted-foreground">Puerto</Label>
-                  <Input
-                    type="number"
-                    value={draft.port}
-                    onChange={(e) => setDraft({ ...draft, port: Number(e.target.value) })}
-                  />
+                <Label className="mb-1 block text-xs text-muted-foreground">Proveedor de envío</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, provider: "brevo" })}
+                    className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                      draft.provider === "brevo"
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="block font-medium">Brevo (recomendado)</span>
+                    <span className="block text-[11px]">Gratis, 300/día, mejor entrega</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, provider: "smtp" })}
+                    className={`rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+                      draft.provider === "smtp"
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="block font-medium">SMTP propio</span>
+                    <span className="block text-[11px]">Alternativa: Gmail, tu dominio, etc.</span>
+                  </button>
                 </div>
+              </div>
+
+              {draft.provider === "brevo" ? (
                 <div>
-                  <Label className="mb-1 block text-xs text-muted-foreground">Usuario</Label>
+                  <Label className="mb-1 block text-xs text-muted-foreground">API key de Brevo</Label>
                   <Input
-                    value={draft.smtp_user}
-                    onChange={(e) => setDraft({ ...draft, smtp_user: e.target.value })}
+                    type="password"
+                    value={draft.brevo_api_key}
+                    onChange={(e) => setDraft({ ...draft, brevo_api_key: e.target.value })}
+                    placeholder={draft.id ? "Dejar en blanco para no cambiarla" : "xkeysib-..."}
                   />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Sacala de Brevo → SMTP &amp; API → API Keys. El email de arriba debe estar
+                    verificado como remitente en tu cuenta de Brevo.
+                  </p>
                 </div>
-              </div>
-              <div>
-                <Label className="mb-1 block text-xs text-muted-foreground">Contraseña</Label>
-                <Input
-                  type="password"
-                  value={draft.smtp_password}
-                  onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value })}
-                  placeholder={draft.id ? "Dejar en blanco para no cambiarla" : "••••••••••••"}
-                />
-              </div>
+              ) : (
+                <>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Servidor SMTP</Label>
+                    <Input
+                      value={draft.host}
+                      onChange={(e) => setDraft({ ...draft, host: e.target.value })}
+                      placeholder="smtp.gmail.com"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="mb-1 block text-xs text-muted-foreground">Puerto</Label>
+                      <Input
+                        type="number"
+                        value={draft.port}
+                        onChange={(e) => setDraft({ ...draft, port: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div>
+                      <Label className="mb-1 block text-xs text-muted-foreground">Usuario</Label>
+                      <Input
+                        value={draft.smtp_user}
+                        onChange={(e) => setDraft({ ...draft, smtp_user: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Contraseña</Label>
+                    <Input
+                      type="password"
+                      value={draft.smtp_password}
+                      onChange={(e) => setDraft({ ...draft, smtp_password: e.target.value })}
+                      placeholder={draft.id ? "Dejar en blanco para no cambiarla" : "••••••••••••"}
+                    />
+                  </div>
+                </>
+              )}
               <label className="flex items-center gap-2 pt-1">
                 <Switch
                   checked={draft.is_default}

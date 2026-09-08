@@ -22,6 +22,7 @@ import type {
   AssignConversationStepConfig,
 } from '@/types'
 import nodemailer from 'nodemailer'
+import { sendViaBrevo } from '@/lib/email/brevo'
 import { supabaseAdmin } from './admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
 import { appendSignature } from '@/lib/email/signature'
@@ -644,13 +645,13 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         cfg.sender_id
           ? db
               .from('email_senders')
-              .select('name, email, host, port, smtp_user, smtp_password, signature_html')
+              .select('name, email, host, port, smtp_user, smtp_password, signature_html, provider, brevo_api_key')
               .eq('id', cfg.sender_id)
               .eq('account_id', args.automation.account_id)
               .maybeSingle()
           : db
               .from('email_senders')
-              .select('name, email, host, port, smtp_user, smtp_password, signature_html')
+              .select('name, email, host, port, smtp_user, smtp_password, signature_html, provider, brevo_api_key')
               .eq('account_id', args.automation.account_id)
               .eq('is_default', true)
               .maybeSingle(),
@@ -684,30 +685,44 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         ? appendUnsubscribeFooter(wrapHtmlForTracking(html, log.id), log.id)
         : html
 
-      const transporter = nodemailer.createTransport({
-        host: sender.host,
-        port: Number(sender.port),
-        secure: Number(sender.port) === 465,
-        auth: { user: sender.smtp_user, pass: sender.smtp_password },
-        connectionTimeout: 15000,
-        greetingTimeout: 15000,
-        socketTimeout: 30000,
-      })
-
       try {
-        const info = await transporter.sendMail({
-          from: `"${sender.name}" <${sender.email}>`,
-          to: recipientEmail,
-          subject,
-          html: trackedHtml,
-        })
+        let messageId: string | undefined
+        if (sender.provider === 'brevo') {
+          const brevoResult = await sendViaBrevo({
+            apiKey: sender.brevo_api_key,
+            fromName: sender.name,
+            fromEmail: sender.email,
+            to: recipientEmail,
+            subject,
+            html: trackedHtml,
+          })
+          if (!brevoResult.success) throw new Error(brevoResult.error || 'Error de Brevo')
+          messageId = brevoResult.messageId
+        } else {
+          const transporter = nodemailer.createTransport({
+            host: sender.host,
+            port: Number(sender.port),
+            secure: Number(sender.port) === 465,
+            auth: { user: sender.smtp_user, pass: sender.smtp_password },
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 30000,
+          })
+          const info = await transporter.sendMail({
+            from: `"${sender.name}" <${sender.email}>`,
+            to: recipientEmail,
+            subject,
+            html: trackedHtml,
+          })
+          messageId = info.messageId
+        }
         if (log) {
           await db
             .from('email_campaign_logs')
-            .update({ status: 'sent', message_id: info.messageId, attempt: 1 })
+            .update({ status: 'sent', message_id: messageId, attempt: 1 })
             .eq('id', log.id)
         }
-        return `email sent to ${recipientEmail} (${info.messageId})`
+        return `email sent to ${recipientEmail} (${messageId})`
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (log) {

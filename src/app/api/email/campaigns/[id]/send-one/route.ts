@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { wrapHtmlForTracking } from '@/lib/email/tracking'
 import { appendSignature } from '@/lib/email/signature'
 import { appendUnsubscribeFooter, isUnsubscribed } from '@/lib/email/unsubscribe'
+import { sendViaBrevo } from '@/lib/email/brevo'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -89,7 +90,7 @@ export async function POST(
   const [{ data: sender }, { data: template }] = await Promise.all([
     admin
       .from('email_senders')
-      .select('name, email, host, port, smtp_user, smtp_password, signature_html')
+      .select('name, email, host, port, smtp_user, smtp_password, signature_html, provider, brevo_api_key')
       .eq('id', campaign.sender_id)
       .maybeSingle(),
     admin
@@ -126,15 +127,17 @@ export async function POST(
   }
   const trackedHtml = appendUnsubscribeFooter(wrapHtmlForTracking(html, log.id), log.id)
 
-  const transporter = nodemailer.createTransport({
-    host: sender.host,
-    port: Number(sender.port),
-    secure: Number(sender.port) === 465,
-    auth: { user: sender.smtp_user, pass: sender.smtp_password },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-  })
+  const transporter = sender.provider === 'brevo'
+    ? null
+    : nodemailer.createTransport({
+        host: sender.host!,
+        port: Number(sender.port),
+        secure: Number(sender.port) === 465,
+        auth: { user: sender.smtp_user!, pass: sender.smtp_password! },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
+      })
 
   let result: { success: boolean; messageId?: string; error?: string } = {
     success: false,
@@ -145,13 +148,26 @@ export async function POST(
 
   for (attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const info = await transporter.sendMail({
-        from: `"${sender.name}" <${sender.email}>`,
-        to: recipient.email,
-        subject,
-        html: trackedHtml,
-      })
-      result = { success: true, messageId: info.messageId }
+      if (sender.provider === 'brevo') {
+        const brevoResult = await sendViaBrevo({
+          apiKey: sender.brevo_api_key!,
+          fromName: sender.name,
+          fromEmail: sender.email,
+          to: recipient.email,
+          subject,
+          html: trackedHtml,
+        })
+        if (!brevoResult.success) throw new Error(brevoResult.error || 'Error de Brevo')
+        result = { success: true, messageId: brevoResult.messageId }
+      } else {
+        const info = await transporter!.sendMail({
+          from: `"${sender.name}" <${sender.email}>`,
+          to: recipient.email,
+          subject,
+          html: trackedHtml,
+        })
+        result = { success: true, messageId: info.messageId }
+      }
       break
     } catch (err) {
       result = { success: false, error: err instanceof Error ? err.message : String(err) }

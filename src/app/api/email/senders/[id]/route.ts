@@ -20,6 +20,7 @@ export async function PATCH(
   const update: Record<string, unknown> = {}
   if (typeof body.name === 'string') update.name = body.name.trim()
   if (typeof body.email === 'string') update.email = body.email.trim()
+  if (body.provider === 'smtp' || body.provider === 'brevo') update.provider = body.provider
   if (typeof body.host === 'string') update.host = body.host.trim()
   if (body.port !== undefined) {
     const port = Number(body.port)
@@ -32,6 +33,10 @@ export async function PATCH(
   // same convention EMKT Zittex used for its account edit modal.
   if (typeof body.smtp_password === 'string' && body.smtp_password.length > 0) {
     update.smtp_password = body.smtp_password
+  }
+  // Same "blank = keep current secret" convention for the Brevo API key.
+  if (typeof body.brevo_api_key === 'string' && body.brevo_api_key.length > 0) {
+    update.brevo_api_key = body.brevo_api_key.trim()
   }
   if ('is_default' in body) update.is_default = Boolean(body.is_default)
   if (typeof body.imap_host === 'string') update.imap_host = body.imap_host.trim() || null
