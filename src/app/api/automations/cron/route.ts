@@ -16,11 +16,14 @@ import type { AutomationContext } from '@/lib/automations/engine'
  * two-step UPDATE-by-id.
  */
 export async function GET(request: Request) {
-  const expected = process.env.AUTOMATION_CRON_SECRET
+  // Vercel Cron sends `Authorization: Bearer $CRON_SECRET`; external
+  // pingers use `x-cron-secret`. Accept either against the same secret.
+  const expected = process.env.AUTOMATION_CRON_SECRET ?? process.env.CRON_SECRET
   if (!expected) {
     return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
   }
-  const supplied = request.headers.get('x-cron-secret') ?? ''
+  const bearer = request.headers.get('authorization')?.replace(/^Bearer /i, '')
+  const supplied = request.headers.get('x-cron-secret') ?? bearer ?? ''
   const suppliedBuf = Buffer.from(supplied)
   const expectedBuf = Buffer.from(expected)
   if (
