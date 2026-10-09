@@ -6,7 +6,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 # ---------------------------------------------------------------
 # Stage 2 — build
@@ -32,6 +32,7 @@ ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
     NEXT_PUBLIC_APP_LOCALE=$NEXT_PUBLIC_APP_LOCALE \
     NEXT_TELEMETRY_DISABLED=1
 
+ENV NODE_OPTIONS=--max-old-space-size=1800
 RUN npm run build
 
 # ---------------------------------------------------------------

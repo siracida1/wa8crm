@@ -2,25 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState, type ElementType } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
+  BarChart3,
   Bell,
   Bot,
+  CalendarDays,
+  ChevronDown,
   Crown,
   FileText,
   GitBranch,
+  Images,
   Inbox,
   LayoutDashboard,
   LogOut,
   Mail,
   MessageSquare,
+  Plug,
   Radio,
   Send,
   Settings,
+  Share2,
   ShieldCheck,
   Shield,
   User,
@@ -92,6 +98,10 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Path used to highlight the row when `href` is not the page itself. */
+  activeHref?: string;
+  /** Render a plain <a> (full navigation) instead of a client <Link>. */
+  native?: boolean;
 }
 
 // Two isolated platforms share this shell (see PlatformSwitcher in the
@@ -120,6 +130,62 @@ const emailNavItems: NavItem[] = [
   { href: "/email/deliverability", labelKey: "emailDeliverability", icon: ShieldCheck },
 ];
 
+// Social media module: Postiz embedded under /social/<section>.
+// Each item goes through /api/social/open, which signs the caller into the
+// Postiz organization of the ACTIVE account and then redirects to /social/<x>.
+const socialItem = (section: string, labelKey: string, icon: typeof Settings): NavItem => ({
+  href: `/api/social/open?section=${section}`,
+  activeHref: `/social/${section}`,
+  native: true,
+  labelKey,
+  icon,
+});
+const socialNavItems: NavItem[] = [
+  socialItem("launches", "socialCalendar", CalendarDays),
+  socialItem("analytics", "socialAnalytics", BarChart3),
+  socialItem("media", "socialMedia", Images),
+  socialItem("plugs", "socialPlugs", Plug),
+  socialItem("settings", "socialSettings", Settings),
+];
+
+interface NavGroup {
+  id: string;
+  labelKey: string;
+  icon: typeof LayoutDashboard;
+  items: NavItem[];
+  /** True when the current route belongs to this group (opens it by default). */
+  match: (pathname: string) => boolean;
+}
+
+// One sidebar, three collapsible modules. The group that owns the current
+// route opens automatically; the user can open/close any of them.
+const navGroups: NavGroup[] = [
+  {
+    id: "whatsapp",
+    labelKey: "groupWhatsapp",
+    icon: MessageSquare,
+    items: whatsappNavItems,
+    match: (p) =>
+      !p.startsWith("/email") &&
+      !p.startsWith("/social") &&
+      !p.startsWith("/settings"),
+  },
+  {
+    id: "email",
+    labelKey: "groupEmail",
+    icon: Mail,
+    items: emailNavItems,
+    match: (p) => p.startsWith("/email"),
+  },
+  {
+    id: "social",
+    labelKey: "groupSocial",
+    icon: Share2,
+    items: socialNavItems,
+    match: (p) => p.startsWith("/social"),
+  },
+];
+
 const bottomNavItems = [
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
@@ -132,6 +198,7 @@ interface SidebarProps {
 
 import { useTranslations } from "next-intl";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { AccountSwitcher } from "@/components/layout/account-switcher";
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
@@ -152,8 +219,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     !!account?.name &&
     account.name !== profile?.full_name;
 
-  const isEmailPlatform = pathname.startsWith("/email");
-  const navItems = isEmailPlatform ? emailNavItems : whatsappNavItems;
+  // Manual open/close overrides per group; until the user toggles one it
+  // follows the current route (see NavGroup.match).
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   // Close the drawer when route changes — users opened it to navigate,
   // so once they pick a destination the drawer should get out of the way.
@@ -210,19 +278,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-          <Link
-            href={isEmailPlatform ? "/email" : "/dashboard"}
-            className="flex items-center gap-2"
-          >
+          <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              {isEmailPlatform ? (
-                <Mail className="h-4 w-4" />
-              ) : (
-                <MessageSquare className="h-4 w-4" />
-              )}
+              <MessageSquare className="h-4 w-4" />
             </div>
             <span className="text-sm font-semibold text-foreground">
-              {isEmailPlatform ? t("titleEmail") : t("title")}
+              {t("title")}
             </span>
           </Link>
           <button
@@ -241,10 +302,36 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <LanguageToggle />
         </div>
 
+        {/* Agency / subaccount switcher (hidden for solo users). */}
+        <AccountSwitcher />
+
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+          <div className="flex flex-col gap-2">
+          {navGroups.map((group) => {
+            const groupOpen = openGroups[group.id] ?? group.match(pathname);
+            return (
+            <div key={group.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenGroups((s) => ({ ...s, [group.id]: !groupOpen }))
+                }
+                aria-expanded={groupOpen}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:py-2"
+              >
+                <group.icon className="h-4 w-4" />
+                <span className="flex-1 text-left">{t(group.labelKey as string)}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    groupOpen ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </button>
+              {groupOpen && (
+          <ul className="ml-4 mt-1 flex flex-col gap-1 border-l border-border pl-2">
+            {group.items.map((item) => {
               // "/dashboard" and "/email" are each their section's index
               // route — other items in the same section start with that
               // same string ("/email/templates" starts with "/email"), so
@@ -252,11 +339,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               // Exact-match those two; prefix-match the rest so a future
               // detail sub-route (e.g. "/email/campaigns/123") still keeps
               // its parent nav item highlighted.
+              const matchHref = item.activeHref ?? item.href;
               const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" &&
-                  item.href !== "/email" &&
-                  pathname.startsWith(item.href));
+                pathname === matchHref ||
+                (matchHref !== "/dashboard" &&
+                  matchHref !== "/email" &&
+                  pathname.startsWith(matchHref));
+              // Native <a> for items that go through an API route
+              // (client-side <Link> navigation would not follow its redirect
+              // and cookies).
+              const ItemLink: ElementType = item.native ? "a" : Link;
 
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
@@ -270,7 +362,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
               return (
                 <li key={item.href}>
-                  <Link
+                  <ItemLink
                     href={item.href}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
@@ -307,11 +399,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                         {unreadNotifications > 9 ? "9+" : unreadNotifications}
                       </span>
                     )}
-                  </Link>
+                  </ItemLink>
                 </li>
               );
             })}
           </ul>
+              )}
+            </div>
+            );
+          })}
+          </div>
 
           <div className="my-4 border-t border-border" />
 

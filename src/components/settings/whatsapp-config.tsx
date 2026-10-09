@@ -611,6 +611,8 @@ export function WhatsAppConfig() {
               <Label className="text-muted-foreground">{t('phoneNumberId')}</Label>
               <Input
                 placeholder="e.g. 100234567890123"
+                autoComplete="off"
+                data-lpignore="true"
                 value={phoneNumberId}
                 onChange={(e) => setPhoneNumberId(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
@@ -621,6 +623,8 @@ export function WhatsAppConfig() {
               <Label className="text-muted-foreground">{t('wabaId')}</Label>
               <Input
                 placeholder="e.g. 100234567890456"
+                autoComplete="off"
+                data-lpignore="true"
                 value={wabaId}
                 onChange={(e) => setWabaId(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
@@ -633,6 +637,8 @@ export function WhatsAppConfig() {
                 <Input
                   type={showToken ? 'text' : 'password'}
                   placeholder={t('accessTokenPlaceholder')}
+                  autoComplete="new-password"
+                  data-lpignore="true"
                   value={accessToken}
                   onChange={(e) => {
                     setAccessToken(e.target.value);
@@ -665,6 +671,8 @@ export function WhatsAppConfig() {
               <Label className="text-muted-foreground">{t('webhookVerifyToken')}</Label>
               <Input
                 placeholder={t('webhookVerifyTokenPlaceholder')}
+                autoComplete="off"
+                data-lpignore="true"
                 value={verifyToken}
                 onChange={(e) => setVerifyToken(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
