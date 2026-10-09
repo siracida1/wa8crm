@@ -24,13 +24,20 @@ export default async function SocialSectionPage({
   const path = SECTIONS[section];
   if (!path) notFound();
 
+  // Postiz draws its own left menu (12px margin + 80px bar + 8px gap). The
+  // sections are already in wacrm's sidebar, so on large screens the frame is
+  // shifted left to crop that strip. Postiz's mobile layout is left intact.
   return (
-    <iframe
-      src={`${POSTIZ_URL}${path}`}
-      title="Postiz"
-      className="w-full rounded-lg border border-border bg-background"
+    <div
+      className="overflow-hidden rounded-lg border border-border bg-background"
       style={{ height: "calc(100vh - 7.5rem)" }}
-      allow="clipboard-write; fullscreen"
-    />
+    >
+      <iframe
+        src={`${POSTIZ_URL}${path}`}
+        title="Postiz"
+        className="h-full w-full border-0 lg:-ml-[100px] lg:w-[calc(100%+100px)]"
+        allow="clipboard-write; fullscreen"
+      />
+    </div>
   );
 }
