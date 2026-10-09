@@ -10,12 +10,14 @@ import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   BarChart3,
   Bell,
+  Blocks,
   Bot,
   CalendarDays,
   ChevronDown,
   Crown,
   FileText,
   GitBranch,
+  Globe,
   Images,
   Inbox,
   LayoutDashboard,
@@ -102,6 +104,8 @@ interface NavItem {
   activeHref?: string;
   /** Render a plain <a> (full navigation) instead of a client <Link>. */
   native?: boolean;
+  /** Open in a new tab (external destinations). */
+  newTab?: boolean;
 }
 
 // Two isolated platforms share this shell (see PlatformSwitcher in the
@@ -142,10 +146,19 @@ const socialItem = (section: string, labelKey: string, icon: typeof Settings): N
 });
 const socialNavItems: NavItem[] = [
   socialItem("launches", "socialCalendar", CalendarDays),
+  socialItem("agents", "socialAgent", Bot),
   socialItem("analytics", "socialAnalytics", BarChart3),
   socialItem("media", "socialMedia", Images),
   socialItem("plugs", "socialPlugs", Plug),
+  socialItem("third-party", "socialIntegrations", Blocks),
   socialItem("settings", "socialSettings", Settings),
+  {
+    href: "https://landing.zittex.com",
+    labelKey: "socialLanding",
+    icon: Globe,
+    native: true,
+    newTab: true,
+  },
 ];
 
 interface NavGroup {
@@ -364,6 +377,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <li key={item.href}>
                   <ItemLink
                     href={item.href}
+                    {...(item.newTab
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",

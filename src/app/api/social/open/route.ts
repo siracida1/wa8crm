@@ -25,7 +25,15 @@ import {
   signPostizJwt,
 } from "@/lib/postiz";
 
-const SECTIONS = new Set(["launches", "analytics", "media", "plugs", "settings"]);
+const SECTIONS = new Set([
+  "launches",
+  "agents",
+  "third-party",
+  "analytics",
+  "media",
+  "plugs",
+  "settings",
+]);
 
 function redirectTo(path: string): NextResponse {
   // Relative Location: behind the reverse proxy request.url may carry an
