@@ -27,6 +27,9 @@ import {
 
 const SECTIONS = new Set([
   "launches",
+  "almanaque",
+  "almanaque-2",
+  "almanaque-3",
   "agents",
   "third-party",
   "analytics",

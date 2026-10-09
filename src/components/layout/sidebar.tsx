@@ -11,6 +11,7 @@ import {
   BarChart3,
   Bell,
   Blocks,
+  BookOpen,
   Bot,
   CalendarDays,
   ChevronDown,
@@ -146,6 +147,9 @@ const socialItem = (section: string, labelKey: string, icon: typeof Settings): N
 });
 const socialNavItems: NavItem[] = [
   socialItem("launches", "socialCalendar", CalendarDays),
+  socialItem("almanaque", "socialAlmanaque1", BookOpen),
+  socialItem("almanaque-2", "socialAlmanaque2", BookOpen),
+  socialItem("almanaque-3", "socialAlmanaque3", BookOpen),
   socialItem("agents", "socialAgent", Bot),
   socialItem("analytics", "socialAnalytics", BarChart3),
   socialItem("media", "socialMedia", Images),

@@ -9,6 +9,9 @@ const POSTIZ_URL = "https://post.zittex.com";
 // Whitelist: only these Postiz routes are reachable through /social/<key>.
 const SECTIONS: Record<string, string> = {
   launches: "/launches",
+  almanaque: "/almanaque",
+  "almanaque-2": "/almanaque-2",
+  "almanaque-3": "/almanaque-3",
   agents: "/agents",
   "third-party": "/third-party",
   analytics: "/analytics",
